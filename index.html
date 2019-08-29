@@ -1,0 +1,364 @@
+<style>
+	* {margin:0; box-sizing: border-box;}
+	div.text {
+		position:fixed;
+		left:0;
+		top:0;
+		height:20%;
+		width:50%;
+		background:#203f5f;
+		color:white;
+		font-family:sans-serif;
+		padding:1em;
+		overflow:auto;
+	}
+	textarea {
+		position:fixed;
+		left:0;
+		top:20%;
+		width: 50%;
+		height:calc(100% - 4em - 20%);
+	}
+	button.run {
+		position:fixed;
+		bottom:0;
+		left:0;
+		width:25%;
+		height:4em;
+	}
+	button.reset {
+		position:fixed;
+		bottom:0;
+		left:25%;
+		width:25%;
+		height:4em;
+	}
+	canvas {
+		position:fixed;
+		padding:0;
+		right:0;
+		top:0;
+		bottom:0;
+		width: 50%;
+		height:100%;
+		background:#eaeaea;
+	}
+</style>
+<div class="text">
+	<strong>Do not use/define run(), draw(), move(), click(), startPuttingWall(), finishPuttingWall(), reset(), distance(), getDistance(), or car</strong><br/><br/><br/>
+	To draw walls, click on the canvas, move your mouse, click to confirm.<br/><br/>
+	To simulate the real world, there are slight variations when calling the move functions.<br/><br/>
+	<strong>forward();</strong> - Goes forward about 1/8th length of the car<br/>
+	<strong>backward();</strong> - Goes backward about 1/8th length of the car<br/>
+	<strong>right();</strong> - Turns right about 5 degrees<br/>
+	<strong>left();</strong> - Turns left about 5 degrees<br/><br/>
+	<strong>distanceFront();</strong> - Returns the distance according to the front sensor<br/>
+	<strong>distanceLeft();</strong> - Same but left<br/>
+	<strong>distanceRight();</strong> - Also obvious<br/>
+	<br/><br/><br/>
+	<strong>Considered cheating:</strong><br/><br/>
+	car = {<br/>
+	&nbsp; &nbsp; x: number,<br/>
+	&nbsp; &nbsp; y: number,<br/>
+	&nbsp; &nbsp; rotation: number,<br/>
+	&nbsp; &nbsp; width: number,<br/>
+	&nbsp; &nbsp; height: number<br/>
+	}<br/>
+	<br/>
+	(Coords and size in pixels, rotation in degrees)<br/><br/>
+	<br/>
+	var SENSOR_DISTANCE = 80;
+</div>
+<textarea id="code">
+function loop () {
+    // Put code here
+    console.log("Press f12 in most browsers to see the Console");
+	console.log("Pressing 'run' saves the code and refreshes the page");
+	
+	forward();
+
+    // You might want to speed this up
+    // or not
+    setTimeout(loop, 1000);
+}
+
+setTimeout(loop, 1000);
+
+</textarea>
+<button class="run" onclick="run()">Run</button>
+<button class="reset" onclick="reset()">Reset</button>
+<canvas id="canvas"></canvas>
+
+<script>
+	function run () {
+		var code = document.getElementById("code");
+		localStorage.setItem("code", code.value);
+		location = location;
+	}
+	
+	function reset () {
+		if (!confirm("You are about to reset both your code and the walls. Are you sure?")) return;
+		localStorage.removeItem("code");
+		localStorage.removeItem("walls");
+		location = location;
+	}
+	
+	var car = {
+		x: 150,
+		y: 150,
+		width: 15,
+		height: 25,
+		rotation: 45
+	};
+	
+	var ctx = document.getElementById("canvas").getContext("2d");
+	
+	ctx.canvas.addEventListener("click", click);
+	ctx.canvas.addEventListener("mousemove", move);
+	
+	var wallThatIsBeingPut;
+	var walls = JSON.parse(localStorage.getItem("walls")) || [];
+
+	function click (event) {
+		if (wallThatIsBeingPut) {			
+			finishPuttingWall(event);
+		} else {
+			startPuttingWall(event);
+		}
+	}
+	
+	function startPuttingWall (event) {
+		wallThatIsBeingPut = {
+			from: {
+				x: event.offsetX,
+				y: event.offsetY
+			},
+			to: {
+				x: event.offsetX,
+				y: event.offsetY
+			}
+		}
+	}
+	
+	function finishPuttingWall (event) {
+		wallThatIsBeingPut.to.x = event.offsetX;
+		wallThatIsBeingPut.to.y = event.offsetY;
+		walls.push(wallThatIsBeingPut);
+		wallThatIsBeingPut = null;
+		localStorage.setItem("walls", JSON.stringify(walls));
+	}
+	
+	function move (event) {
+		if(wallThatIsBeingPut) {
+			wallThatIsBeingPut.to.x = event.offsetX;
+			wallThatIsBeingPut.to.y = event.offsetY;
+		}
+	}
+	
+	function draw () {
+		var box = ctx.canvas.getBoundingClientRect();
+		ctx.canvas.width = box.width;
+		ctx.canvas.height = box.height;
+		
+		// Draw the car
+		ctx.translate(car.x, car.y);
+		ctx.rotate(car.rotation * Math.PI / 180);
+		
+		// CAR
+		ctx.fillStyle = "black";
+		ctx.fillRect(-car.width / 2, -car.height / 2, car.width, car.height);
+
+		// LIGHT
+		ctx.fillStyle = "yellow";
+		ctx.fillRect(- car.width / 2, -car.height / 2, car.width, car.height / 8);
+		
+		ctx.rotate(-car.rotation * Math.PI / 180);
+		ctx.translate(-car.x, -car.y);
+		
+		var forward = distanceFront();
+		var left = distanceLeft();
+		var right = distanceRight();
+		
+		// FORWARD SENSOR
+		ctx.strokeStyle = "red";
+		ctx.beginPath();
+		ctx.moveTo(car.x, car.y);
+		ctx.lineTo(
+			car.x + Math.cos((car.rotation - 90) * Math.PI / 180) * forward,
+			car.y + Math.sin((car.rotation - 90) * Math.PI / 180) * forward
+		);
+		ctx.stroke();
+		
+		// LEFT SENSOR
+		ctx.strokeStyle = "red";
+		ctx.beginPath();
+		ctx.moveTo(car.x, car.y);
+		ctx.lineTo(
+			car.x + Math.cos((car.rotation - 180) * Math.PI / 180) * left,
+			car.y + Math.sin((car.rotation - 180) * Math.PI / 180) * left
+		);
+		ctx.stroke();
+		
+		// RIGHT SENSOR
+		ctx.strokeStyle = "red";
+		ctx.beginPath();
+		ctx.moveTo(car.x, car.y);
+		ctx.lineTo(
+			car.x + Math.cos((car.rotation) * Math.PI / 180) * right,
+			car.y + Math.sin((car.rotation) * Math.PI / 180) * right
+		);
+		ctx.stroke();
+		
+		ctx.strokeStyle = "black";
+		
+		if (wallThatIsBeingPut) {
+			// WALL BEING PUT
+			ctx.beginPath();
+			ctx.moveTo(wallThatIsBeingPut.from.x, wallThatIsBeingPut.from.y);
+			ctx.lineTo(wallThatIsBeingPut.to.x, wallThatIsBeingPut.to.y);
+			ctx.stroke();
+		}
+		
+		for (var k = 0; k < walls.length; k++) {
+			// OTHER WALLS
+			ctx.beginPath();
+			ctx.moveTo(walls[k].from.x, walls[k].from.y);
+			ctx.lineTo(walls[k].to.x, walls[k].to.y);
+			ctx.stroke();
+		}
+		
+		requestAnimationFrame(draw);
+	}
+	
+	function forward () {
+		var distance = (car.height / 8 + Math.random());
+		car.x += distance * Math.cos((car.rotation - 90) * Math.PI / 180);
+		car.y += distance * Math.sin((car.rotation - 90) * Math.PI / 180);
+	}
+	
+	function backward () {
+		var distance = (car.height / 8 + Math.random());
+		car.x -= distance * Math.cos((car.rotation - 90) * Math.PI / 180);
+		car.y -= distance * Math.sin((car.rotation - 90) * Math.PI / 180);
+	}
+
+	function right () {
+		car.rotation += 5 + Math.random();
+	}
+	
+	function left () {
+		car.rotation -= 5 + Math.random();
+	}
+	
+	function distance (point1, point2) {
+		return Math.sqrt((point1.x - point2.x) * (point1.x - point2.x) + (point1.y - point2.y) * (point1.y - point2.y));
+	}
+	
+	// Returns the distance from (line1.from.x, line1.from.y) to the intersection point
+	// If they do not intersect, returns Infinnity
+	// Variation on https://stackoverflow.com/questions/563198/how-do-you-detect-where-two-line-segments-intersect
+	function getDistance (line1, line2) {
+		var s1_x = line1.to.x - line1.from.x;
+		var s1_y = line1.to.y - line1.from.y;
+		
+		var s2_x = line2.to.x - line2.from.x;
+		var s2_y = line2.to.y - line2.from.y;
+		
+		var p0_x = line1.from.x;
+		var p0_y = line1.from.y;
+		
+		var p1_x = line1.to.x;
+		var p1_y = line1.to.y;		
+
+		var p2_x = line2.from.x;
+		var p2_y = line2.from.y;
+		
+		var p3_x = line2.to.x;
+		var p3_y = line2.to.y;
+		
+		var s = (-s1_y * (p0_x - p2_x) + s1_x * (p0_y - p2_y)) / (-s2_x * s1_y + s1_x * s2_y);
+		var t = (s2_x * (p0_y - p2_y) - s2_y * (p0_x - p2_x)) / (-s2_x * s1_y + s1_x * s2_y);
+		
+		if (s >= 0 && s <= 1 && t >= 0 && t <= 1) {
+			// Collision detected
+			return distance(line1.from, {
+				x: p0_x + (t * s1_x),
+				y: p0_y + (t * s1_y)
+			});
+		}
+		
+		return Infinity;
+	}
+	
+	var SENSOR_DISTANCE = 80;
+
+	function distanceFront () {
+		var smallest = SENSOR_DISTANCE;
+		
+		for (var k = 0; k < walls.length; k++) {
+			var distance = getDistance({
+				from: { x: car.x, y: car.y},
+				to: {
+					x: car.x + Math.cos((car.rotation - 90) * Math.PI / 180) * SENSOR_DISTANCE,
+					y: car.y + Math.sin((car.rotation - 90) * Math.PI / 180) * SENSOR_DISTANCE
+				}
+			}, walls[k]);
+			
+			if (distance < smallest) {
+				smallest = distance;
+			}
+		}
+
+		return smallest;
+	}
+	
+	function distanceLeft () {
+		var smallest = SENSOR_DISTANCE;
+		
+		for (var k = 0; k < walls.length; k++) {
+			var distance = getDistance({
+				from: { x: car.x, y: car.y},
+				to: {
+					x: car.x + Math.cos((car.rotation - 180) * Math.PI / 180) * SENSOR_DISTANCE,
+					y: car.y + Math.sin((car.rotation - 180) * Math.PI / 180) * SENSOR_DISTANCE
+				}
+			}, walls[k]);
+			
+			if (distance < smallest) {
+				smallest = distance;
+			}
+		}
+
+		return smallest;
+	}
+	
+	function distanceRight () {
+		var smallest = SENSOR_DISTANCE;
+		
+		for (var k = 0; k < walls.length; k++) {
+			var distance = getDistance({
+				from: { x: car.x, y: car.y},
+				to: {
+					x: car.x + Math.cos((car.rotation) * Math.PI / 180) * SENSOR_DISTANCE,
+					y: car.y + Math.sin((car.rotation) * Math.PI / 180) * SENSOR_DISTANCE
+				}
+			}, walls[k]);
+			
+			if (distance < smallest) {
+				smallest = distance;
+			}
+		}
+
+		return smallest;
+	}
+	
+	requestAnimationFrame(draw);
+	
+	var code = document.getElementById("code");
+	if (!localStorage.getItem("code")) {
+		localStorage.setItem("code", code.value);
+	}
+	
+	code.value = localStorage.getItem("code");
+	eval(localStorage.getItem("code"));
+</script>
